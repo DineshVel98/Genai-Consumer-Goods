@@ -67,6 +67,52 @@ class AzureSQLManager:
             status = True
             return status
         except Exception as e:
-            print("Insert file metadata failed", str(e))
+            print("Insert to file metadata table failed", str(e))
             return status
 
+    def insert_chat_history(self, params):
+        status = False
+        try:
+            if not self.connection:
+                self.connect()
+            query= """
+                    INSERT INTO dbo.chat_history(session_id, user_id, user_query, bot_response, created_by)
+                    VALUES (?, ?, ?, ?, ?)
+                """
+            
+            self._execute_query(query, params)
+            status = True
+            return status
+        except Exception as e:
+            print("Insert to chat history table failed", str(e))
+            return status
+
+    def get_chat_history(self, params):
+
+        if not self.connection:
+                self.connect()
+        
+        query= """
+                SELECT user_query, bot_response FROM dbo.chat_history
+                WHERE session_id = ?
+                """
+        data = self.read_data(query, params)
+
+        return data
+    
+    def delete_chat_history(self, params):
+        status = False
+        try:
+            if not self.connection:
+                self.connect()
+            query= """
+                    DELETE FROM dbo.chat_history
+                    WHERE session_id = ?
+                """
+            
+            self._execute_query(query, params)
+            status = True
+            return status
+        except Exception as e:
+            print("Delete chat history failed", str(e))
+            return status

@@ -33,3 +33,6 @@ class Config:
         self.postgres_username = os.getenv("POSTGRE_USERNAME")
         self.postgres_password = os.getenv("POSTGRE_PASSWORD")
         self.postgres_port = os.getenv("POSTGRE_PORT")
+
+        # Tavily configuration
+        self.tavily_api_key = os.getenv("TAVILY_API_KEY")

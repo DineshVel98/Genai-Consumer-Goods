@@ -2,13 +2,15 @@ from langchain.chat_models import init_chat_model
 from langchain.schema import SystemMessage, HumanMessage
 from app.api.v1.utils.config import Config
 from app.api.v1.utils.postgres_sql_manager import PostgresDBManager
+from app.api.v1.utils.vector_db_manager import VectorDBManager
 from app.api.v1.utils.config import Config
 from langchain_core.tools import tool
+from langchain_tavily import TavilySearch
 import json
 
 
 @tool
-def postgres_query_generator(user_question: str):
+def sql_analyst_tool(user_question: str):
     """
     Description:
         Converts a natural language question into an optimized PostgreSQL SELECT query.
@@ -16,21 +18,6 @@ def postgres_query_generator(user_question: str):
     Purpose:
         This tool uses an LLM to translate user intent into SQL for a predefined Postgres schema.
         It helps users query structured data without needing SQL knowledge.
-
-    Input:
-        user_question (str): The user's plain-English query about sales data.
-            Example: "Show me total revenue by region for September."
-
-    Output:
-        dict: A JSON object with three keys:
-            - "sql" (str): The generated SQL SELECT statement.
-            - "explanation" (str): A human-readable explanation of the query logic.
-            - "params" (dict): Parameter placeholders (e.g., {"p1": "2025-09-01"}).
-
-    Notes:
-        - Only SELECT queries are allowed (read-only).
-        - It respects schema constraints and column definitions.
-        - Automatically applies a LIMIT clause to prevent large queries.
     """
 
     prompt = """
@@ -71,43 +58,101 @@ def postgres_query_generator(user_question: str):
         model_provider="azure_openai"
     )
 
+    db_manager = PostgresDBManager(Config())
+    max_retries = 5
+    last_error = None
+    query_details = None
+    sql = None
+    explanation = None
+    params = None
 
-    # Get the response
-    response = chat_model.invoke(prompt.format(max_rows= 100, user_question= user_question))
+    for attempt in range(1, max_retries + 1):
+        try:
+            # Build prompt (if retry, include error context)
+            if last_error:
+                prompt = (
+                    BASE_PROMPT
+                    + f"\nThe previous SQL failed with error:\n{last_error}\n"
+                      "Please fix the SQL and regenerate a valid one."
+                )
+            else:
+                prompt = BASE_PROMPT
 
-    query_details = json.loads(response.content)
+            # Get LLM response
+            response = chat_model.invoke(prompt.format(max_rows=100, user_question=user_question))
 
-    return query_details
+            # Parse LLM response safely
+            try:
+                query_details = json.loads(response.content)
+                sql = query_details.get("sql")
+                explanation = query_details.get("explanation", "")
+                params = query_details.get("params", {})
+            except Exception:
+                raise ValueError(f"Invalid LLM output format: {response.content}")
 
-@tool
-def postgres_query_executor(query_details):
-    """
-    Description:
-        Executes a generated SQL query against a PostgreSQL database and returns the result.
-
-    Purpose:
-        This tool takes the output of the SQL generator tool, runs the query safely against
-        a PostgreSQL database, and returns structured data.
-
-    Input:
-        query_details (dict): The JSON object returned by `postgres_query_generator`.
-            Example:
-            {
-                "sql": "SELECT store_region, SUM(revenue) FROM bronze.sales_data GROUP BY store_region;",
-                "params": {},
-                "explanation": "Aggregates revenue by region."
+            # Try executing query
+            output = db_manager._execute_query(sql, params)
+            return {
+                "success": True,
+                "attempts": attempt,
+                "sql": sql,
+                "explanation": explanation,
+                "data": output,
+                "error": None
             }
 
-    Output:
-        list[dict] | str: A list of query result rows (as dictionaries) or a message string if empty/error.
+        except Exception as e:
+            last_error = str(e) or traceback.format_exc()
+            print(f"[Attempt {attempt}] Query failed: {last_error}")
 
-    Notes:
-        - Automatically connects to the configured Postgres database via `PostgresDBManager`.
-        - Safely substitutes query parameters.
-        - Only supports SELECT queries (read-only mode).
-    """
-    db_manager = PostgresDBManager(Config())
-    output = ""
-    if query_details.get("sql", None):
-        output = db_manager._execute_query(query_details["sql"], query_details["params"])
-    return output
+            # Retry with error feedback
+            if attempt == max_retries:
+                return {
+                    "success": False,
+                    "attempts": attempt,
+                    "sql": sql,
+                    "explanation": explanation,
+                    "error": last_error,
+                    "data": None
+                }
+
+@tool
+def rag_search_tool(user_question: str, session_id: str):
+    """Top-3 chunks from Knowledge Base (empty string if none)"""
+    try:
+        vector_db = VectorDBManager(Config())
+
+        similar_docs = vector_db.vector_store.similarity_search(
+            query = user_question,
+            k=5,
+            filters=f"session_id eq '{session_id}'"
+        )
+
+        return "\n\n".join([doc.page_content for doc in similar_docs])
+    except Exception as e:
+        return f"RAG_SEARCH_TOOL Error::{e}"
+    
+
+# Initialize Tavily search
+tavily = TavilySearch(max_results=3, topic="general")
+
+@tool
+def web_search_tool(query: str) -> str:
+    """Up-to-date web info via Tavily"""
+    try:
+        result = tavily.invoke({"query": query})
+
+        # Extract and format the results from Tavily response
+        if isinstance(result, dict) and 'results' in result:
+            formatted_results = []
+            for item in result['results']:
+                title = item.get('title', 'No title')
+                content = item.get('content', 'No content')
+                url = item.get('url', '')
+                formatted_results.append(f"Title: {title}\nContent: {content}\nURL: {url}")
+
+            return "\n\n".join(formatted_results) if formatted_results else "No results found"
+        else:
+            return str(result)
+    except Exception as e:
+        return f"WEB_SEARCH_TOOL::{e}"

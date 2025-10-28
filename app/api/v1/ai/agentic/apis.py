@@ -1,10 +1,70 @@
-from fastapi import APIRouter
-from app.api.v1.ai.agentic.services import sql_analyst
+from fastapi import APIRouter, HTTPException
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from app.api.v1.utils.langchain_utils import contextualise_chain
+from app.api.v1.utils.langgraph_agent import agent
+from app.api.v1.utils.azure_sql_manager import AzureSQLManager
+from app.api.v1.ai.agentic.models import AgenticChatRequest, ChatResponse
+from app.api.v1.utils.config import Config
+from app.api.v1.utils.utils import history_to_lc_messages, append_message
+import logging
 
 agentic_router = APIRouter(prefix= "/agentic-chatbot")
+logging.basicConfig(filename='app.log', level=logging.INFO)
 
 
-@agentic_router.post("/ask-question")
-async def ask_question(user_question: str):
-    return sql_analyst(user_question)
+@agentic_router.post("/chat")
+def chat(query_input: AgenticChatRequest):
+    """
+    Main chat endpoint using the LangGraph agent with routing, RAG, Analyst, and web search capabilities.
+    """
+
+    logging.info(f"Session ID: {query_input.session_id}, User Query: {query_input.question}")
+
+    try:
+        # Store the conversation
+        azure_db = AzureSQLManager(Config())
+
+        # Convert chat history to LangChain messages
+        chat_history = azure_db.get_chat_history(query_input.session_id)
+        messages = history_to_lc_messages(chat_history)
+
+        # Add current user message
+        # 2. Generate a stand-alone question
+        standalone_q = contextualise_chain.invoke({
+            "chat_history": messages,
+            "input": query_input.question,
+        })
+
+        messages = append_message(messages, HumanMessage(content=standalone_q))
+
+        print(messages)
+        # Invoke the LangGraph
+        result = agent.invoke(
+            {"messages": messages}
+        )
+        print("??????????????????????")
+
+        # Get the last AI message
+        last_message = next((m for m in reversed(result["messages"])
+                           if isinstance(m, AIMessage)), None)
+
+        if last_message:
+            answer = last_message.content
+        else:
+            answer = "I apologize, but I couldn't generate a response at this time."
+
+        params = (query_input.session_id, query_input.user_id, query_input.question, answer, query_input.user_id)
+        azure_db.insert_chat_history(params)
+        logging.info(f"Session ID: {session_id}, AI Response: {answer}")
+
+        return ChatResponse(answer=answer, session_id=query_input.session_id)
+
+    except Exception as e:
+        logging.error(f"Error in chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+
+
+
     

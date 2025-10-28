@@ -82,8 +82,8 @@ class VectorDBManager:
             self.vector_store.add_texts(texts = docs_array, metadatas = meta_array)
         else:
             print("Document already exists, skipping")
-
-    def query_with_document(self, user_question, session_id):
+    
+    def retrive_chunks(self, user_question, session_id):
 
         similar_docs = self.vector_store.similarity_search(
             query = user_question,
@@ -91,8 +91,12 @@ class VectorDBManager:
             filters=f"session_id eq '{session_id}'"
         )
 
-        context_from_docs = "\n\n".join([doc.page_content for doc in similar_docs])
+        return "\n\n".join([doc.page_content for doc in similar_docs])
 
+    def query_with_document(self, user_question, session_id):
+
+        context_from_docs = retrive_chunks(user_question, session_id)
+        
         prompt_template = """
         You are given the following context from the document:
         {context}
