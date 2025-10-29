@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from app.api.v1.spark.apis import spark_router
 from app.api.v1.ai.chatbot_rag.apis import rag_router
 from app.api.v1.ai.agentic.apis import agentic_router
+from dotenv import load_dotenv
+        
+load_dotenv()
 
 app = FastAPI()
 

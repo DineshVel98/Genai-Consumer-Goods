@@ -37,12 +37,10 @@ def chat(query_input: AgenticChatRequest):
 
         messages = append_message(messages, HumanMessage(content=standalone_q))
 
-        print(messages)
         # Invoke the LangGraph
         result = agent.invoke(
-            {"messages": messages}
+            {"messages": messages, "session_id": query_input.session_id}
         )
-        print("??????????????????????")
 
         # Get the last AI message
         last_message = next((m for m in reversed(result["messages"])
@@ -55,7 +53,7 @@ def chat(query_input: AgenticChatRequest):
 
         params = (query_input.session_id, query_input.user_id, query_input.question, answer, query_input.user_id)
         azure_db.insert_chat_history(params)
-        logging.info(f"Session ID: {session_id}, AI Response: {answer}")
+        logging.info(f"Session ID: {query_input.session_id}, AI Response: {answer}")
 
         return ChatResponse(answer=answer, session_id=query_input.session_id)
 

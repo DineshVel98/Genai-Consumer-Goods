@@ -80,10 +80,11 @@ def answer_node(state: AgentState) -> AgentState:
         ctx_parts.append("Knowledge Base Information:\n" + state["rag"])
     if state.get("web"):
         ctx_parts.append("Web Search Results:\n" + state["web"])
-    if state.get("analyst"):
-        ctx_parts.append("Analyst Results:\n" + state["analyst"])
 
     context = "\n\n".join(ctx_parts) if ctx_parts else "No external context available."
+
+    if state.get("analyst"):
+        context = "Analyst Results:\n" + str(state["analyst"])
 
     prompt = f"""Please answer the user's question using the provided context.
 

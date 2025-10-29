@@ -5,7 +5,7 @@ from app.api.v1.utils.nodes import router_node, rag_node, web_node, answer_node,
 from app.api.v1.utils.shared import AgentState
 
 # Routing helpers
-def from_router(st: AgentState) -> Literal["rag", "answer", "end"]:
+def from_router(st: AgentState) -> Literal["rag", "answer", "analyst", "end"]:
     return st["route"]
 
 def after_rag(st: AgentState) -> Literal["answer", "web"]:
@@ -24,21 +24,16 @@ g.add_node("rag_lookup", rag_node)
 g.add_node("web_search", web_node)
 g.add_node("analyst", analyst_node)
 g.add_node("answer", answer_node)
-
 g.set_entry_point("router")
 g.add_conditional_edges("router", from_router,
-                        {"rag": "rag_lookup", "answer": "answer", "end": END})
+                        {"analyst": "analyst", "rag": "rag_lookup", "answer": "answer", "end": END})
 
 g.add_conditional_edges("rag_lookup", after_rag,
                         {"answer": "answer", "web": "web_search"})
 
-
-g.add_conditional_edges("router",  after_analyst, 
-                        {"analyst": "analyst"})
-g.add_edge("analyst", "answer")
-
 g.add_conditional_edges("web_search", after_web)
-                        
+
+g.add_edge("analyst", "answer")          
 g.add_edge("web_search",  "answer")
 g.add_edge("answer", END)
 

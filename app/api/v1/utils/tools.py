@@ -1,9 +1,9 @@
 from langchain.chat_models import init_chat_model
 from langchain.schema import SystemMessage, HumanMessage
-from app.api.v1.utils.config import Config
 from app.api.v1.utils.postgres_sql_manager import PostgresDBManager
 from app.api.v1.utils.vector_db_manager import VectorDBManager
 from app.api.v1.utils.config import Config
+from app.api.v1.utils.shared import analyst_llm
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
 import json
@@ -20,7 +20,7 @@ def sql_analyst_tool(user_question: str):
         It helps users query structured data without needing SQL knowledge.
     """
 
-    prompt = """
+    BASE_PROMPT = """
     You are a SQL assistant. Context:
     - DB: Postgres. Read-only access.
     - Allowed statements: SELECT only. Max rows: {max_rows}.
@@ -52,12 +52,6 @@ def sql_analyst_tool(user_question: str):
 
     Produce the simplest, efficient SQL that answers the question."""
 
-    # Initialize the Azure OpenAI chat model
-    chat_model = init_chat_model(
-        model= conf.ai_deployment_name,
-        model_provider="azure_openai"
-    )
-
     db_manager = PostgresDBManager(Config())
     max_retries = 5
     last_error = None
@@ -79,27 +73,19 @@ def sql_analyst_tool(user_question: str):
                 prompt = BASE_PROMPT
 
             # Get LLM response
-            response = chat_model.invoke(prompt.format(max_rows=100, user_question=user_question))
+            response = analyst_llm.invoke(prompt.format(max_rows=100, user_question=user_question))
 
             # Parse LLM response safely
             try:
-                query_details = json.loads(response.content)
-                sql = query_details.get("sql")
-                explanation = query_details.get("explanation", "")
-                params = query_details.get("params", {})
+                sql = response.sql
+                explanation = response.explanation
+                params = response.params
             except Exception:
-                raise ValueError(f"Invalid LLM output format: {response.content}")
+                raise ValueError(f"Invalid LLM output format: {response}")
 
             # Try executing query
             output = db_manager._execute_query(sql, params)
-            return {
-                "success": True,
-                "attempts": attempt,
-                "sql": sql,
-                "explanation": explanation,
-                "data": output,
-                "error": None
-            }
+            return output
 
         except Exception as e:
             last_error = str(e) or traceback.format_exc()
@@ -107,14 +93,7 @@ def sql_analyst_tool(user_question: str):
 
             # Retry with error feedback
             if attempt == max_retries:
-                return {
-                    "success": False,
-                    "attempts": attempt,
-                    "sql": sql,
-                    "explanation": explanation,
-                    "error": last_error,
-                    "data": None
-                }
+                return "Failed"
 
 @tool
 def rag_search_tool(user_question: str, session_id: str):

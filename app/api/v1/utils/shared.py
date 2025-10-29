@@ -1,6 +1,6 @@
 from app.api.v1.utils.llm_manager import LLMManager
 from app.api.v1.utils.config import Config
-from typing import TypedDict, List, Literal, Dict
+from typing import TypedDict, List, Literal, Dict, Any
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
 
@@ -13,10 +13,14 @@ class RouteDecisionModel(BaseModel):
 class RagJudgeModel(BaseModel):
     sufficient: bool
 
+from typing import Dict, Any
+from pydantic import BaseModel, Field
+
 class AnalystModel(BaseModel):
     sql: str
     explanation: str
-    params: Dict
+    params: Dict[str, Any] | None
+
 
 # ── Shared state type ────────────────────────────────────────────────
 class AgentState(TypedDict, total=False):
@@ -41,5 +45,5 @@ answer_llm = LLMManager(Config(), temperature=0.7)\
 
 analyst_llm = LLMManager(Config(), temperature=0)\
                 .connect()\
-                .with_structured_output(AnalystModel)
+                .with_structured_output(AnalystModel, method="function_calling")
 

@@ -21,3 +21,4 @@ docx2txt==0.9
 pyodbc==5.2.0
 langgraph==1.0.1
 langchain-tavily==0.2.12
+langsmith==0.4.38
