@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 class AnalystModel(BaseModel):
     sql: str
     explanation: str
-    params: Dict[str, Any] | None
+    params: List[Any] | None
 
 
 # ── Shared state type ────────────────────────────────────────────────

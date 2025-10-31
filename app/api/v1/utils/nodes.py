@@ -10,12 +10,22 @@ from app.api.v1.utils.config import Config
 def router_node(state: AgentState) -> AgentState:
     # Use full message history with a system prompt
     system_prompt = (
-    "You are a router that decides how to handle user queries:\n"
-    "- Use 'end' for pure greetings/small-talk (also provide a 'reply') and answer that is already in the current conversation chat history\n"
-    "- Use 'rag' when knowledge base lookup is needed\n"
-    "- Use 'analyst' when question is about consumer goods sales data\n"
-    "- Use 'answer' when you can answer directly without external info"
+        "You are a smart routing controller that decides which node should handle a user's query.\n"
+        "Classify each query into one of the following categories and return both the 'route' and an optional 'reply' when required.\n\n"
+        "Routing rules:\n"
+        "- Use 'end' if the message is:\n"
+        "  • A greeting, farewell, or small talk (e.g., 'hi', 'hello', 'how are you', 'thanks').\n"
+        "  • A repeated question already answered in the recent chat history. Include a short friendly reply.\n\n"
+        "- Use 'analyst' if the question relates to:\n"
+        "  • Sales data, sales metrics, revenue, stores, products, customers, or any business data analysis.\n"
+        "  • Mentions words like 'sales_data', 'revenue', 'profit', 'region performance', 'trend analysis', or 'KPIs'.\n"
+        "  • Analytical or explanatory requests (e.g., 'explain', 'analyze', 'summarize', 'compare', 'show insights').\n\n"
+        "- Use 'rag' if the query needs factual or domain-specific information that is not directly about sales data\n"
+        "  and not already answered — meaning a knowledge base lookup or document search is needed.\n\n"
+        "- Use 'answer' if you can confidently respond directly using general knowledge, reasoning, or context,\n"
+        "  without needing external data or retrieval.\n\n"
     )
+
 
 
     messages = [SystemMessage(content= system_prompt)] + state["messages"]

@@ -46,9 +46,10 @@ def sql_analyst_tool(user_question: str):
 
     Constraints:
     - Use only existing columns above.
-    - Use parameter placeholders like :p1 for external filters.
+    - Use **PostgreSQL parameter placeholders** in the form `%s`, etc.
+    - Ensure syntactically correct, efficient, and readable SQL.
     - Add LIMIT {max_rows} if necessary.
-    - Return JSON with keys: {{"sql": "<SELECT ...>", "explanation": "...", "params": {{"p1":"value", ...}}}}
+    - Return JSON with keys: {{"sql": "<SELECT ...>", "explanation": "...", "params": ["value1", "value2", ...]}}
 
     Produce the simplest, efficient SQL that answers the question."""
 
@@ -74,7 +75,6 @@ def sql_analyst_tool(user_question: str):
 
             # Get LLM response
             response = analyst_llm.invoke(prompt.format(max_rows=100, user_question=user_question))
-
             # Parse LLM response safely
             try:
                 sql = response.sql

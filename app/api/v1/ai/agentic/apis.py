@@ -8,7 +8,7 @@ from app.api.v1.utils.config import Config
 from app.api.v1.utils.utils import history_to_lc_messages, append_message
 import logging
 
-agentic_router = APIRouter(prefix= "/agentic-chatbot")
+agentic_router = APIRouter(prefix= "/agentic")
 logging.basicConfig(filename='app.log', level=logging.INFO)
 
 
@@ -60,6 +60,29 @@ def chat(query_input: AgenticChatRequest):
     except Exception as e:
         logging.error(f"Error in chat: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@agentic_router.get("/get-chat-history")
+def get_chat_history(session_id: str):
+    azure_sql_manager = AzureSQLManager(Config())
+    chat_history = azure_sql_manager.get_chat_history([session_id])
+    messages = [{"human": hum, "ai": ai} for hum, ai in chat_history]
+    response = {"session_id": session_id, "messages": messages}
+    return response
+
+@agentic_router.delete("/delete-chat-history")
+def delete_chat_history(session_id: str):
+    azure_sql_manager = AzureSQLManager(Config())
+    status = azure_sql_manager.delete_chat_history([session_id])
+    return status
+
+
+@agentic_router.get("/all-session-ids")
+def get_all_session_ids(user_id: str):
+    azure_sql_manager = AzureSQLManager(Config())
+    chat_history = azure_sql_manager.get_first_record_per_group([user_id])
+    response = [{"session_id": sid, "user_question": q} for sid, q in chat_history]
+    return response
 
 
 

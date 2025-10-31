@@ -99,6 +99,25 @@ class AzureSQLManager:
         data = self.read_data(query, params)
 
         return data
+
+    def get_first_record_per_group(self, params):
+
+        if not self.connection:
+                self.connect()
+        
+        query= """
+                SELECT session_id, user_query
+                    FROM (
+                        SELECT *,
+                            ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY created_at) AS rn
+                        FROM dbo.chat_history
+                        WHERE user_id = ?
+                    ) t
+                    WHERE rn = 1
+                """
+        data = self.read_data(query, params)
+
+        return data
     
     def delete_chat_history(self, params):
         status = False
